@@ -140,3 +140,108 @@ ORDER BY Dept_Salary DESC;
 SELECT *
 FROM Total_Salary_Per_Department;
 
+-- Parks and Recreation has the highest Department Salary Total.
+
+-- 3. Stored Procedures
+
+/*
+Definition:
+A stored procedure is a set of SQL statements saved and executed as a single callable unit.
+Defined using the CREATE PROCEDURE statement.
+
+Use Cases:
+Automate repetitive tasks (e.g., daily reporting).
+Encapsulate complex business logic for reuse and consistency.
+
+Questions:
+1. Create a stored procedure to calculate and display the total number of employees in the parks_departments table.
+2. Write a stored procedure to update the salary of employees in a specific department by a given percentage.
+3. Create a stored procedure that accepts a department name and returns the average salary of employees in that department.
+*/
+
+-- 1. Create a stored procedure to calculate and display the total number of employees in the parks_departments table.
+DROP PROCEDURE IF EXISTS Total_Employees;
+
+DELIMITER $$
+
+CREATE PROCEDURE Total_Employees()
+BEGIN
+	SELECT COUNT(sal.employee_id) AS Employee_Total
+	FROM parks_departments pd
+	JOIN employee_salary sal
+		ON pd.department_id  = sal.dept_id;
+END $$
+
+DELIMITER ;
+    
+CALL Total_Employees();
+
+-- 2. Write a stored procedure to update the salary of employees in a specific department by a given percentage.
+
+-- Static Method to Create another Updated_Salary column
+DROP PROCEDURE IF EXISTS Update_Salary;
+
+DELIMITER $$
+
+CREATE PROCEDURE Update_Salary()
+BEGIN
+	SELECT *, salary * 1.10 AS Updated_Salary
+	FROM employee_salary
+	WHERE dept_id = 1;
+END $$
+
+DELIMITER ;
+
+CALL Update_Salary();
+
+-- Dynamic Alternative Method to Actually Update
+DROP PROCEDURE IF EXISTS Update_Salary;
+
+DELIMITER $$
+
+CREATE PROCEDURE Update_Salary(IN p_dept_id INT, IN p_percentage DECIMAL(5, 2))  -- 5 - precision, 2 scale i.e dp MAX 999.99 MIN -999.99 in this case
+BEGIN 
+	UPDATE employee_salary 
+    SET salary = salary * (1 + p_percentage / 100) 
+    WHERE dept_id = p_dept_id; 
+END $$ 
+
+DELIMITER ; 
+
+CALL Update_Salary(1, 10);
+
+
+-- 3. Create a stored procedure that accepts a department name and returns the average salary of employees in that department.
+
+DROP PROCEDURE IF EXISTS Average_Dept_Salary;
+
+DELIMITER $$ 
+CREATE PROCEDURE Average_Dept_Salary(IN p_department_name VARCHAR(255)) 
+BEGIN 
+	SELECT AVG(salary) AS Avg_Salary 
+	FROM employee_salary sal 
+	JOIN parks_departments pd 
+		ON sal.dept_id = pd.department_id 
+	WHERE pd.department_name = p_department_name; 
+END $$
+
+DELIMITER ;
+
+CALL Average_Dept_Salary('Parks and Recreation');
+
+-- Confirmational Code:
+
+DELIMITER $$
+CREATE PROCEDURE Average_Dept_Salary(p_department_id INT)
+BEGIN
+	SELECT AVG(salary) AS Avg_Salary
+	FROM employee_salary sal
+	JOIN parks_departments pd
+		ON sal.dept_id = pd.department_id
+	WHERE pd.department_id = p_department_id;
+END $$
+
+DELIMITER ;
+
+CALL Average_Dept_Salary(1);
+
