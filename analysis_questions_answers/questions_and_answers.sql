@@ -59,6 +59,8 @@ SELECT *
 FROM CTE_Top_3_Earning
 WHERE RowNum <= 3;
 
+-- -------------------------------------------------------------------------------------------------------------------------------------------
+
 -- 2. Temporary Tables
 
 /*
@@ -108,8 +110,6 @@ JOIN
 SELECT * 
 FROM  Above_Salary_Average;
 
-
-
 -- Alternative Way using CTE and not a SubQuery on Join 
 
 -- Calculate the average salary
@@ -141,6 +141,8 @@ SELECT *
 FROM Total_Salary_Per_Department;
 
 -- Parks and Recreation has the highest Department Salary Total.
+
+-- -----------------------------------------------------------------------------------------------------------------------------------------------
 
 -- 3. Stored Procedures
 
@@ -244,4 +246,273 @@ END $$
 DELIMITER ;
 
 CALL Average_Dept_Salary(1);
+
+-- ------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- 4. TRIGGERS
+
+/*
+Definition:
+A trigger is a set of SQL statements executed automatically in response to specific events on a table (e.g., INSERT, UPDATE, or DELETE).
+
+Use Cases:
+Enforce data integrity (e.g., ensure valid data entry).
+Track changes to critical data (e.g., log salary updates).
+
+Questions:
+1. Create a trigger to log any changes made to the employee_salary table into an audit table.
+2. Write a trigger to ensure no employee can be added with a salary below $20,000.
+3. Create a trigger to automatically update the parks_departments table when a new department is added to the system.
+*/
+
+-- 1. Create a trigger to log any changes made to the employee_salary table into an audit table.
+
+-- Step 1: Create the audit table
+CREATE TABLE audit_employee_salary (
+    audit_id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id INT,
+    old_salary DECIMAL(10, 2),
+    new_salary DECIMAL(10, 2),
+    change_type VARCHAR(10), -- 'INSERT', 'UPDATE', 'DELETE'
+    change_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Step 2: Create the trigger
+-- Trigger for INSERT
+DELIMITER $$
+
+CREATE TRIGGER log_employee_salary_insert
+AFTER INSERT ON employee_salary
+FOR EACH ROW
+BEGIN
+    INSERT INTO audit_employee_salary (employee_id, new_salary, change_type)
+    VALUES (NEW.employee_id, NEW.salary, 'INSERT');
+END $$
+
+DELIMITER ;
+
+-- Test Case for INSERT 
+
+-- Insert a new employee into the employee_salary table
+INSERT INTO employee_salary (employee_id, first_name, last_name, occupation, salary, dept_id)
+VALUES (101, 'Dumisani', 'Maxwell', 'Wildlife AI Tracker', 50000, 1);
+
+-- Check the audit table for the new entry
+SELECT * 
+FROM audit_employee_salary 
+WHERE employee_id = 101;
+
+-- Trigger for UPDATE
+
+DELIMITER $$
+
+CREATE TRIGGER log_employee_salary_update
+AFTER UPDATE ON employee_salary
+FOR EACH ROW
+BEGIN
+    INSERT INTO audit_employee_salary (employee_id, old_salary, new_salary, change_type)
+    VALUES (OLD.employee_id, OLD.salary, NEW.salary, 'UPDATE');
+END $$
+
+DELIMITER ;
+
+-- Test Case for Update 
+
+-- Update the salary of an existing employee
+UPDATE employee_salary
+SET salary = 55000
+WHERE employee_id = 101;
+
+-- Check the audit table for the update entry
+SELECT * 
+FROM audit_employee_salary 
+WHERE employee_id = 101;
+
+-- Trigger for DELETE
+
+DELIMITER $$
+
+CREATE TRIGGER log_employee_salary_delete
+AFTER DELETE ON employee_salary
+FOR EACH ROW
+BEGIN
+    INSERT INTO audit_employee_salary (employee_id, old_salary, change_type)
+    VALUES (OLD.employee_id, OLD.salary, 'DELETE');
+END $$
+
+DELIMITER ;
+
+-- Test Case for Delete 
+
+-- Delete the employee from the employee_salary table
+DELETE 
+FROM employee_salary 
+WHERE employee_id = 101;
+
+-- Check the audit table for the delete entry
+SELECT * 
+FROM audit_employee_salary 
+WHERE employee_id = 101;
+
+-- 2. Write a trigger to ensure no employee can be added with a salary below $20,000.
+
+DELIMITER $$
+
+CREATE TRIGGER prevent_low_salary
+BEFORE INSERT ON employee_salary
+FOR EACH ROW
+BEGIN
+    IF NEW.salary < 20000 THEN
+        SIGNAL SQLSTATE '45000'  -- SINAL: This keyword is used to raise an error in SQL, The SQLSTATE code '45000' is a general error condition. It is commonly used to indicate a user-defined exception.
+        SET MESSAGE_TEXT = 'Salary cannot be less than $20,000';  -- SET MESSAGE TEXT: This clause provides a custom error message that is displayed when the error is raised.
+    END IF;
+END $$
+
+DELIMITER ;
+
+-- Test Case for Employee wih less than $20,000
+
+-- Attempt to insert an employee with a low salary
+INSERT INTO employee_salary (employee_id, first_name, last_name, occupation, salary, dept_id)
+VALUES (102, 'Ralph', 'Maxwell', 'Domestic Animal Trainer', 15000, 1);
+
+-- Test Case for Employee with above $20000 salary
+
+-- Insert an employee with a valid salary
+INSERT INTO employee_salary (employee_id, first_name, last_name, occupation, salary, dept_id)
+VALUES (102, 'Ralph', 'Maxwell', 'Domestic Animal Trainer', 25000, 1);
+
+-- Check if the insertion was successful
+SELECT * 
+FROM employee_salary 
+WHERE employee_id = 102;
+
+-- 3. Create a trigger to automatically update the parks_departments table when a new department is added to the system.
+
+-- Create Table departments for Test Case usage
+CREATE TABLE IF NOT EXISTS departments (
+    department_id INT PRIMARY KEY,
+    department_name VARCHAR(255)
+);
+
+-- Creating the after_insert_trigger
+DELIMITER $$
+
+CREATE TRIGGER after_insert_department
+AFTER INSERT ON departments
+FOR EACH ROW
+BEGIN
+    INSERT INTO parks_departments (department_id, department_name)
+    VALUES (NEW.department_id, NEW.department_name);
+END $$
+
+DELIMITER ;
+
+-- Test Case 
+-- Insert a new department
+INSERT INTO departments (department_id, department_name)
+VALUES (10, 'New Parks Department');
+
+-- Check if the new department is added to parks_departments
+SELECT * 
+FROM parks_departments 
+WHERE department_id = 10;
+
+-- -----------------------------------------------------------------------------------------------------------------------------------------------
+
+-- 5. Events
+
+/*
+Definition:
+An event is a scheduled SQL task that runs at specified times or intervals.
+Created using the CREATE EVENT statement.
+
+Use Cases:
+Automate periodic tasks (e.g., cleaning old records).
+Generate automated reports or backups.
+
+Questions:
+1. Create an event to delete employees from the employee_demographics table who are older than 60 years, running daily at midnight.
+2. Write an event to archive salary data into a historical table every month.
+3. Create an event to reset the temporary table of employee counts every week.
+*/
+
+
+-- 1. Create an event to delete employees from the employee_demographics table who are older than 65 years, running daily at midnight.
+DELIMITER $$
+
+DELIMITER $$
+
+CREATE EVENT delete_retirees
+ON SCHEDULE EVERY 1 DAY
+STARTS CURRENT_TIMESTAMP + INTERVAL 1 DAY
+DO
+BEGIN
+    DELETE 
+    FROM employee_demographics
+    WHERE age >= 60;
+END $$
+
+DELIMITER ;
+
+-- 2 Write an event to archive salary data into a historical table every month.
+
+CREATE TABLE IF NOT EXISTS salary_archive (
+  employee_id INT NOT NULL,
+  first_name VARCHAR(50) NOT NULL,
+  last_name VARCHAR(50) NOT NULL,
+  occupation VARCHAR(50),
+  salary INT,
+  dept_id INT,
+  archive_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+DELIMITER $$
+
+CREATE EVENT archive_salary_data
+ON SCHEDULE EVERY 1 MONTH
+STARTS CURRENT_TIMESTAMP + INTERVAL 1 MONTH
+DO
+BEGIN
+    INSERT INTO salary_archive (employee_id, first_name, last_name, occupation, salary, dept_id)
+    SELECT employee_id, first_name, last_name, occupation, salary, dept_id
+    FROM employee_salary
+    WHERE employee_id NOT IN (SELECT employee_id FROM salary_archive);
+END $$
+
+DELIMITER ;
+
+
+-- 3. Create an event to reset the temporary table of employee counts every week.
+
+DROP TEMPORARY TABLE IF EXISTS Total_Employee_Count; -- DROP TEMP TABLE IF IT EXISTS 
+
+CREATE TEMPORARY TABLE Total_Employee_Count AS 
+SELECT COUNT(*) AS Employee_Count
+FROM employee_salary;
+
+SELECT *
+FROM Total_Employee_Count;
+
+DELIMITER $$
+
+CREATE EVENT reset_employee_total_count
+ON SCHEDULE EVERY 1 WEEK
+STARTS CURRENT_TIMESTAMP + INTERVAL 1 WEEK
+DO
+BEGIN
+    TRUNCATE TABLE Total_Employee_Count;  -- Empties the temporary table.
+    INSERT INTO Total_Employee_Count (Employee_Count) -- Inserts the current employee count into the temporary table.
+    SELECT COUNT(*) AS Employee_Count 
+    FROM employee_salary;
+END $$
+
+DELIMITER ;
+
+
+
+
+
+
 
