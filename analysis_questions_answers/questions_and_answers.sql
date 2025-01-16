@@ -119,7 +119,8 @@ SET @Avg_Salary = (SELECT AVG(salary) FROM employee_salary);
 DROP TEMPORARY TABLE IF EXISTS Above_Salary_Average;
 
 CREATE TEMPORARY TABLE Above_Salary_Average AS 
-SELECT * FROM employee_salary WHERE salary > @Avg_Salary; 
+SELECT * FROM employee_salary 
+WHERE salary > @Avg_Salary; 
 
 -- Query the temporary table for their details 
 SELECT * 
@@ -438,8 +439,7 @@ Questions:
 */
 
 
--- 1. Create an event to delete employees from the employee_demographics table who are older than 65 years, running daily at midnight.
-DELIMITER $$
+-- 1. Create an event to delete employees from the employee_demographics table who are older than 60 years, running daily at midnight.
 
 DELIMITER $$
 
@@ -509,6 +509,166 @@ BEGIN
 END $$
 
 DELIMITER ;
+
+-- TEST CASES WITH TIMES THAT CAN BE WORKED WITH
+
+-- For Question 1:
+
+DELIMITER $$
+
+CREATE EVENT delete_retirees
+ON SCHEDULE EVERY 1 MINUTE
+STARTS CURRENT_TIMESTAMP + INTERVAL 1 MINUTE
+DO
+BEGIN
+    DELETE 
+    FROM employee_demographics
+    WHERE age >= 60;
+END $$
+
+DELIMITER ;
+
+-- Test Case:
+INSERT INTO employee_demographics (employee_id, age)
+VALUES (103, 70);
+
+-- Wait for the event to run
+
+SELECT * 
+FROM employee_demographics 
+WHERE employee_id = 103;
+
+-- Expected Result: No rows should be returned for employee_id = 103
+
+--  For Question 2: Write an event to archive salary data into a historical table every month.
+
+CREATE TABLE IF NOT EXISTS salary_archive (
+  employee_id INT NOT NULL,
+  first_name VARCHAR(50) NOT NULL,
+  last_name VARCHAR(50) NOT NULL,
+  occupation VARCHAR(50),
+  salary INT,
+  dept_id INT,
+  archive_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+DELIMITER $$ 
+
+CREATE EVENT archive_salary_data 
+ON SCHEDULE EVERY 1 MINUTE STARTS CURRENT_TIMESTAMP + INTERVAL 1 MINUTE 
+DO 
+BEGIN 
+	INSERT INTO salary_archive (employee_id, first_name, last_name, occupation, salary, dept_id) 
+	SELECT employee_id, first_name, last_name, occupation, salary, dept_id 
+	FROM employee_salary 
+	WHERE employee_id NOT IN (SELECT employee_id FROM salary_archive); 
+END $$ 
+
+DELIMITER ;
+
+-- Test Case
+
+INSERT INTO employee_salary (employee_id, first_name, last_name, occupation, salary, dept_id)
+VALUES (104, 'John', 'Doe', 'Manager', 60000, 1);
+
+-- Wait for the event to run
+
+SELECT * 
+FROM salary_archive 
+WHERE employee_id = 104;
+
+-- Expected Result: A row should be returned for employee_id = 104.
+
+-- For Question 3: Create an event to reset the temporary table of employee counts every week.
+
+DROP TEMPORARY TABLE IF EXISTS Total_Employee_Count;
+
+CREATE TEMPORARY TABLE Total_Employee_Count AS 
+SELECT COUNT(*) AS Employee_Count
+FROM employee_salary;
+
+SELECT *
+FROM Total_Employee_Count;
+
+-- Event Code 
+
+DELIMITER $$
+
+CREATE EVENT reset_employee_total_count
+ON SCHEDULE EVERY 1 MINUTE
+STARTS CURRENT_TIMESTAMP + INTERVAL 1 MINUTE
+DO
+BEGIN
+    TRUNCATE TABLE Total_Employee_Count;
+    INSERT INTO Total_Employee_Count (Employee_Count)
+    SELECT COUNT(*) AS Employee_Count
+    FROM employee_salary;
+END $$
+
+DELIMITER ;
+
+
+-- Test Case
+
+SELECT * 
+FROM Total_Employee_Count;
+
+-- Note down the current employee count
+
+INSERT INTO employee_salary (employee_id, salary)
+VALUES (105, 50000);
+
+-- Wait for the event to run
+
+SELECT * 
+FROM Total_Employee_Count;
+
+-- -----------------------------------------------------------------------------------------------------------------------------------------------
+
+-- Additional Notes:
+
+/*
+SQL Execution Order
+FROM: Specifies the tables from which to retrieve data.
+Example: FROM employee_salary
+
+JOIN:Joins tables based on conditions.
+Example: JOIN parks_departments ON employee_salary.dept_id = parks_departments.department_id
+
+WHERE: Filters rows before grouping.
+Example: WHERE age >= 30
+
+GROUP BY: Groups rows that share a property.
+Example: GROUP BY dept_id
+
+HAVING: Filters groups after grouping.
+Example: HAVING COUNT(*) > 1
+
+SELECT: Selects columns or expressions.
+Example: SELECT dept_id, COUNT(*)
+
+DISTINCT:Removes duplicate rows from the result.
+Example: SELECT DISTINCT department_name
+
+ORDER BY: Sorts the result.
+Example: ORDER BY salary DESC
+
+LIMIT / OFFSET: Limits the number of returned rows or skips rows.
+Example: LIMIT 10 OFFSET 5
+*/
+
+SELECT dept_id, COUNT(*) AS EmployeeCount
+FROM employee_salary
+JOIN parks_departments ON employee_salary.dept_id = parks_departments.department_id
+WHERE age >= 30
+GROUP BY dept_id
+HAVING COUNT(*) > 1
+ORDER BY EmployeeCount DESC
+LIMIT 5;
+
+-- ------------------------------------------------------------------------------------------------------------------------------------------
+
+
 
 
 
