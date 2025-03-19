@@ -97,6 +97,23 @@ FROM More_Than_1_Employee;
 
 DROP TEMPORARY TABLE IF EXISTS Above_Salary_Average; 
 
+-- Way 1: Using a SubQQuery in the WHERE clause to Filter
+
+DROP TEMPORARY TABLE IF EXISTS Earning_Above_Avg_Salary;
+
+CREATE TEMPORARY TABLE Earning_Above_Avg_Salary AS
+SELECT *
+FROM employee_salary
+WHERE salary > 
+	( SELECT AVG(salary)
+	  FROM employee_salary
+	);
+    
+SELECT *
+FROM Earning_Above_Avg_Salary;
+
+-- Way 2:  Alternative Way using CTE and not a SubQuery on Join
+
 CREATE TEMPORARY TABLE Above_Salary_Average AS 
 SELECT sal.*, avg_table.Avg_Salary 
 FROM employee_salary sal 
